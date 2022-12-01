@@ -118,6 +118,24 @@ class speck():
         X = self.convert_to_binary([c0l, c0r, c1l, c1r])
         return X, Y
 
+    def generate_all_true_data(self, n, nr, diff=(0x0040, 0x0000)):
+        # No labels, all true data. Used for unsupervised learning
+        
+        # generate plaintext
+        p0l = np.frombuffer(urandom(2*n), dtype=np.uint16)
+        p0r = np.frombuffer(urandom(2*n), dtype=np.uint16)
+        p1l = p0l^diff[0]
+        p1r = p0r^diff[1]
+        # generate keys
+        master_keys = self.generate_master_key(n)
+        ks = self.expand_key(master_keys, nr)
+        # generate ciphertext
+        c0l, c0r = self.encrypt((p0l, p0r), ks)
+        c1l, c1r = self.encrypt((p1l, p1r), ks)
+        # Generate data with binary representation
+        X = self.convert_to_binary([c0l, c0r, c1l, c1r])
+        return X
+
 
 if __name__=='__main__':
     speck = speck()
