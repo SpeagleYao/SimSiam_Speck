@@ -19,6 +19,11 @@ class BasicBlock(nn.Module):
         self.conv2 = nn.Conv1d(planes, planes, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm1d(planes)
         self.shortcut = nn.Sequential()
+        if in_planes != planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(in_planes, planes, kernel_size=1),
+                nn.BatchNorm1d(self.expansion*planes)
+            )
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
@@ -47,10 +52,15 @@ class SimSiam_My(nn.Module):
             nn.BatchNorm1d(32),
             nn.ReLU(inplace=True),
             BasicBlock(32, 32),
+            # BasicBlock(32, 64),
+            # BasicBlock(64, 64),
             # nn.Linear(64, 64, bias=False),
             # nn.BatchNorm1d(64),
             # nn.ReLU(inplace=True), # first layer
             nn.Flatten(),
+            nn.Linear(512, 512, bias=False),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True), # first layer
             nn.Linear(512, 64, bias=False),
             nn.BatchNorm1d(64),
             nn.ReLU(inplace=True), # second layer
@@ -71,10 +81,11 @@ class SimSiam_My(nn.Module):
         # self.encoder.fc[6].bias.requires_grad = False # hack: not use bias as it is followed by BN
 
         # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(64, 64, bias=False),
-                                        nn.BatchNorm1d(64),
+        self.predictor = nn.Sequential(nn.Linear(64, 512, bias=False),
+                                        nn.BatchNorm1d(512),
                                         nn.ReLU(inplace=True), # hidden layer
-                                        nn.Linear(64, 64)) # output layer
+                                        nn.Linear(512, 64)
+        ) # output layer
 
     def forward(self, x):
         """

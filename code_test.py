@@ -1,7 +1,8 @@
 import numpy as np
 import torch
+from crypto.speck import speck
 
-a = torch.as_tensor(np.arange(640))
-a = a.view(10, 4, 16)
-print(a[:, 0:2, :])
-print(a[:, 2:4, :].shape)
+sp = speck()
+X, Y = sp.generate_train_data(10**7, 7)
+print(X[Y==0].shape)
+print(X[Y==1].shape)

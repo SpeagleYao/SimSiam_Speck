@@ -51,11 +51,12 @@ else:
 # Y_test= torch.as_tensor(np.load("./data/7r/test_label_7r.npy")).to(torch.float32)
 sp = speck()
 X_train = sp.generate_all_true_data(10**7, args.nr)
-X_test = sp.generate_all_true_data(10**6, args.nr)
+X_test, Y_test = sp.generate_train_data(10**6, args.nr)
 X_train = torch.as_tensor(X_train).to(torch.float32)
 X_test = torch.as_tensor(X_test).to(torch.float32)
+Y_test = torch.as_tensor(Y_test).to(torch.float32)
 train_loader = DataLoader(TensorDataset(X_train), batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
-test_loader = DataLoader(TensorDataset(X_test), batch_size=args.test_batch_size, num_workers=4, pin_memory=True)
+test_loader = DataLoader(TensorDataset(X_test, Y_test), batch_size=args.test_batch_size, num_workers=4, pin_memory=True)
 
 # model = ResNet_Gohr(args.depth)
 model = SS().cuda()
@@ -88,21 +89,27 @@ def train(epoch):
 
         if batch_idx % 500 == 0: tqdm.write('Train Set: Average Loss: {:.6f}'.format(np.mean(epoch_loss)))
 
-    filename = './checkpoints/SimSiam.pth'
+    filename = './checkpoints/SimSiam_'+str(args.nr)+'r.pth'
     torch.save(model.state_dict(), filename)
 
 def inference():
     model.eval()
-    test_loss = []
+    test_loss_t = []
+    test_loss_f = []
     # correct = 0
     with torch.no_grad():
-        for (data, ) in test_loader:
+        for (data, target) in test_loader:
             if args.cuda:
                 data = data.cuda()
+                target = target.cuda()
             p1, p2, z1, z2 = model(data)
-            loss = -(criterion(p1, z2).mean() + criterion(p2, z1).mean()) * 0.5
-            test_loss.append(loss.cpu().detach().item())
-        tqdm.write('Test Set: Average Loss: {:.6f}\n'.format(np.mean(test_loss)))
+            p1t = p1[target==1];p2t = p2[target==1];z1t = z1[target==1];z2t = z2[target==1];
+            p1f = p1[target==0];p2f = p2[target==0];z1f = z1[target==0];z2f = z2[target==0];
+            loss_t = -(criterion(p1t, z2t).mean() + criterion(p2t, z1t).mean()) * 0.5
+            loss_f = -(criterion(p1f, z2f).mean() + criterion(p2f, z1f).mean()) * 0.5
+            test_loss_t.append(loss_t.cpu().detach().item())
+            test_loss_f.append(loss_f.cpu().detach().item())
+        tqdm.write('Test Set: True Loss: {:.6f}\tFalse Loss: {:.6f}\n'.format(np.mean(test_loss_t), np.mean(test_loss_f)))
 
 for epoch in range(1, args.epochs + 1):
     train(epoch)
