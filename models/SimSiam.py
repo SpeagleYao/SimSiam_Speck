@@ -48,25 +48,26 @@ class SimSiam_My(nn.Module):
         # self.encoder = base_encoder(num_classes=dim, zero_init_residual=True)
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(2, 32, kernel_size=1),
-            nn.BatchNorm1d(32),
-            nn.ReLU(inplace=True),
-            BasicBlock(32, 32),
-            # BasicBlock(32, 64),
-            # BasicBlock(64, 64),
-            # nn.Linear(64, 64, bias=False),
-            # nn.BatchNorm1d(64),
-            # nn.ReLU(inplace=True), # first layer
-            nn.Flatten(),
-            nn.Linear(512, 512, bias=False),
-            nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True), # first layer
-            nn.Linear(512, 64, bias=False),
+            nn.Conv1d(2, 64, kernel_size=1),
             nn.BatchNorm1d(64),
+            nn.ReLU(inplace=True),
+
+            BasicBlock(64, 64),
+            BasicBlock(64, 64),
+            BasicBlock(64, 128),
+            BasicBlock(128, 128),
+            BasicBlock(128, 128),
+
+            nn.Flatten(),
+            nn.Linear(2048, 2048, bias=False),
+            nn.BatchNorm1d(2048),
+            nn.ReLU(inplace=True), # first layer
+            nn.Linear(2048, 2048, bias=False),
+            nn.BatchNorm1d(2048),
             nn.ReLU(inplace=True), # second layer
-            nn.BatchNorm1d(64, affine=False)
+            nn.BatchNorm1d(2048, affine=False)
         )
-        # self.encoder[8].bias.requires_grad = False !!!
+        # self.encoder[8].bias.requires_grad = False
         # self.res = BasicBlock(64, 64)
         # # build a 3-layer projector
         # prev_dim = self.encoder.fc.weight.shape[1]
@@ -81,10 +82,10 @@ class SimSiam_My(nn.Module):
         # self.encoder.fc[6].bias.requires_grad = False # hack: not use bias as it is followed by BN
 
         # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(64, 512, bias=False),
+        self.predictor = nn.Sequential(nn.Linear(2048, 512, bias=False),
                                         nn.BatchNorm1d(512),
                                         nn.ReLU(inplace=True), # hidden layer
-                                        nn.Linear(512, 64)
+                                        nn.Linear(512, 2048)
         ) # output layer
 
     def forward(self, x):

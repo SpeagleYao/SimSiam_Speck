@@ -19,7 +19,7 @@ parser.add_argument('--batch-size', type=int, default=5000,
                 help='input batch size for training (default: 5000)')
 parser.add_argument('--test-batch-size', type=int, default=5000,
                 help='input batch size for testing (default: 5000)')
-parser.add_argument('--epochs', type=int, default=20,
+parser.add_argument('--epochs', type=int, default=200,
                 help='number of epochs to train (default: 200)')
 parser.add_argument('--weight-decay', '--wd', default=1e-5, type=float,
                 help='weight decay (default: 1e-5)')
@@ -31,7 +31,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                 help='disables CUDA training')
 parser.add_argument('--depth', type=int, default=1,
                 help='depth of resnet (default: 1)')
-parser.add_argument('--nr', type=int, default=6,
+parser.add_argument('--nr', type=int, default=5,
                 help='round of encryptions (default: 7)')
 # parser.add_argument('--seed', type=int, default=1,
 #                 help='random seed (default: 1)')
@@ -60,12 +60,13 @@ test_loader = DataLoader(TensorDataset(X_test, Y_test), batch_size=args.test_bat
 
 # model = ResNet_Gohr(args.depth)
 model = SS().cuda()
-# model = nn.DataParallel(model)
+model = nn.DataParallel(model)
 if args.cuda:
     model.cuda()
 
 # criterion = nn.MSELoss().cuda()
 criterion = nn.CosineSimilarity(dim=1).cuda()
+scaler = torch.cuda.amp.GradScaler()
 optimizer = opt.Adam(model.parameters(), lr=args.base_lr, weight_decay=args.weight_decay)
 scheduler = sch.CyclicLR(optimizer, base_lr = args.base_lr, max_lr = args.max_lr, step_size_up = 9, step_size_down = 1, cycle_momentum=False)
 # lambda1 = lambda epoch: (args.max_lr + (9 - epoch % 10)/9 * (args.base_lr - args.max_lr))/args.base_lr
@@ -74,22 +75,29 @@ scheduler = sch.CyclicLR(optimizer, base_lr = args.base_lr, max_lr = args.max_lr
 def train(epoch):
     model.train()
     epoch_loss = []
-    tqdm.write('Train Epoch: {}'.format(epoch))
+    tqdm.write('Train Epoch: {}\tlr: {:.6f}'.format(epoch, optimizer.param_groups[0]['lr']))
     for batch_idx, (data, ) in enumerate(tqdm(train_loader)):
         if args.cuda:
             data = data.cuda()
         optimizer.zero_grad()
         p1, p2, z1, z2 = model(data)
-        loss = -(criterion(p1, z2).mean() + criterion(p2, z1).mean()) * 0.5
+        with torch.cuda.amp.autocast():
+            loss = -(criterion(p1, z2).mean() + criterion(p2, z1).mean()) * 0.5
         
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+    
+        # loss.backward()
+        # optimizer.step()
 
         epoch_loss.append(loss.cpu().detach().item())
 
         if batch_idx % 500 == 0: tqdm.write('Train Set: Average Loss: {:.6f}'.format(np.mean(epoch_loss)))
+    
+    scheduler.step()
 
-    filename = './checkpoints/SimSiam_'+str(args.nr)+'r.pth'
+    filename = './checkpoints/SimSiam_'+str(args.nr)+'r_2048f.pth'
     torch.save(model.state_dict(), filename)
 
 def inference():
